@@ -610,6 +610,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": ok, "msg": "" if ok else "τρέχει ήδη"})
             if u.path == "/api/engine/status":
                 return self._send(200, engine_runner.status())
+            if u.path == "/api/resolve":
+                tokens = [t for t in q.get("tokens", [""])[0].split(",") if t]
+                return self._send(200, bot.resolve_tokens(tokens))
             if u.path == "/api/copy/status":
                 return self._send(200, copy_mgr.status())
             if u.path == "/api/autocopy/status":

@@ -60,6 +60,36 @@ def get_client():
     return client
 
 
+_resolve_cache = {}
+
+
+def resolve_token(token: str):
+    """Επιστρέφει 1 (κέρδισε), 0 (έχασε), ή None (ανοιχτή) για ένα clob token."""
+    if token in _resolve_cache:
+        return _resolve_cache[token]
+    try:
+        r = requests.get(f"{GAMMA_API}/markets", params={"clob_token_ids": token}, timeout=15)
+        ms = r.json()
+    except Exception:
+        return None
+    if not ms or not ms[0].get("closed"):
+        return None
+    m = ms[0]
+    toks = json.loads(m.get("clobTokenIds") or "[]")
+    prices = json.loads(m.get("outcomePrices") or "[]")
+    if token in toks:
+        v = float(prices[toks.index(token)])
+        res = 1 if v > 0.98 else 0 if v < 0.02 else None
+        if res is not None:
+            _resolve_cache[token] = res
+        return res
+    return None
+
+
+def resolve_tokens(tokens):
+    return {t: resolve_token(t) for t in tokens}
+
+
 def journal_load():
     if not os.path.exists(JOURNAL_FILE):
         return []
