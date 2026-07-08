@@ -1,0 +1,5 @@
+.env
+__pycache__/
+watchlist.json
+trades_log.json
+resolution_cache.json

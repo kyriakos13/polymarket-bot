@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polymarket Bot</title>
+<style>
+  :root{--bg:#0e1116;--card:#161b22;--line:#272e38;--fg:#e6edf3;--dim:#8b949e;
+        --accent:#2f81f7;--green:#3fb950;--red:#f85149;--yellow:#d29922}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+  header{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  .badge{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+  .badge.dry{background:#1f2a1a;color:var(--green);border:1px solid #2a4020}
+  .badge.live{background:#2a1a1a;color:var(--red);border:1px solid #402020}
+  nav{display:flex;gap:4px;padding:10px 18px 0;flex-wrap:wrap}
+  nav button{background:none;border:none;color:var(--dim);padding:8px 14px;border-radius:8px 8px 0 0;cursor:pointer;font-size:14px}
+  nav button.active{color:var(--fg);background:var(--card)}
+  main{padding:18px;max-width:1000px;margin:0 auto}
+  .panel{display:none}.panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input,select{background:#0d1117;border:1px solid var(--line);color:var(--fg);padding:8px 10px;border-radius:8px;font-size:14px}
+  input{flex:1;min-width:160px}
+  button.btn{background:var(--accent);border:none;color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+  button.btn:hover{filter:brightness(1.1)}
+  button.btn.ghost{background:#21262d;color:var(--fg)}
+  button.btn.red{background:var(--red)}
+  button.btn.green{background:var(--green)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500}
+  .pos{color:var(--green)}.neg{color:var(--red)}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .dim{color:var(--dim)}
+  .wallet{font-family:ui-monospace,monospace;font-size:12px;cursor:pointer;color:var(--accent)}
+  .tag{font-size:11px;padding:2px 7px;border-radius:6px;background:#21262d;color:var(--dim)}
+  h3{margin:0 0 12px;font-size:15px}
+  .hint{font-size:12px;color:var(--dim);margin-top:6px}
+  .log{max-height:280px;overflow:auto;font-family:ui-monospace,monospace;font-size:12px}
+  .log div{padding:3px 0;border-bottom:1px solid #1c222b}
+  .spin{color:var(--dim)}
+  .amt{width:80px;flex:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Polymarket Bot</h1>
+  <span id="mode" class="badge dry">…</span>
+  <span class="dim" style="font-size:12px" id="modehint"></span>
+  <button class="btn ghost" style="margin-left:auto" onclick="checkAccount()">🔌 Έλεγχος σύνδεσης</button>
+</header>
+<nav>
+  <button data-tab="board" class="active">🏆 Κορυφαίοι</button>
+  <button data-tab="trader">👤 Trader</button>
+  <button data-tab="watch">⭐ Watchlist</button>
+  <button data-tab="signals">🧠 Έξυπνο Μείγμα</button>
+  <button data-tab="market">📊 Αγορά</button>
+  <button data-tab="copy">🔁 Copy Trading</button>
+  <button data-tab="journal">📒 Πείραμα</button>
+  <button data-tab="radar">🔔 Ραντάρ</button>
+  <button data-tab="newmk">🆕 Νέες Αγορές</button>
+  <button data-tab="allmk">📋 Όλες οι Αγορές</button>
+</nav>
+<main>
+
+  <!-- LEADERBOARD -->
+  <section id="board" class="panel active">
+    <div class="card">
+      <div class="row">
+        <select id="lbPeriod">
+          <option value="day">Ημέρα</option>
+          <option value="week">Εβδομάδα</option>
+          <option value="month" selected>Μήνας</option>
+          <option value="all">Συνολικά</option>
+        </select>
+        <select id="lbBy">
+          <option value="PNL" selected>Κέρδος (PnL)</option>
+          <option value="VOL">Τζίρος (Volume)</option>
+        </select>
+        <button class="btn" onclick="loadBoard()">Φόρτωση</button>
+      </div>
+      <div class="hint">Δες ποιοι βγάζουν λεφτά, μετά κλικ «Χαρτοφυλάκιο» ή «Copy».</div>
+    </div>
+    <div class="card"><div id="boardOut" class="spin">Πάτα «Φόρτωση»…</div></div>
+  </section>
+
+  <!-- TRADER -->
+  <section id="trader" class="panel">
+    <div class="card">
+      <div class="row">
+        <input id="trSearch" placeholder="Αναζήτηση με όνομα trader (π.χ. trump, poly-whale…)">
+        <button class="btn ghost" onclick="searchProfiles()">🔍 Αναζήτηση</button>
+      </div>
+      <div id="searchOut"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="trWallet" placeholder="…ή βάλε απευθείας διεύθυνση wallet 0x…">
+        <button class="btn" onclick="loadTrader()">Δες</button>
+      </div>
+    </div>
+    <div class="card"><h3>Χαρτοφυλάκιο (ανοιχτές θέσεις)</h3><div id="posOut" class="dim">—</div></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">Trades <span id="trWalletLabel" class="dim mono"></span></h3>
+        <div class="row" style="gap:6px">
+          <select id="trLimit" onchange="loadTrades()">
+            <option value="30">Τελευταία 30</option>
+            <option value="100">Τελευταία 100</option>
+            <option value="500">Τελευταία 500</option>
+            <option value="all">Όλα</option>
+          </select>
+        </div>
+      </div>
+      <div id="trOut" class="dim" style="margin-top:8px">—</div>
+    </div>
+  </section>
+
+  <!-- WATCHLIST -->
+  <section id="watch" class="panel">
+    <div class="card">
+      <h3>Πρόσθεσε trader στη λίστα σου</h3>
+      <div class="row">
+        <input id="wlWallet" placeholder="wallet 0x…" style="min-width:220px">
+        <input id="wlLabel" placeholder="όνομα/ετικέτα" class="amt" style="width:140px">
+        <label class="dim">βάρος</label><input id="wlWeight" class="amt" type="number" value="1" min="0.1" step="0.1">
+        <button class="btn" onclick="wlAdd()">＋ Προσθήκη</button>
+      </div>
+      <div class="hint">Το «βάρος» = πόσο εμπιστεύεσαι αυτόν τον trader (π.χ. 2 = μετράει διπλά στο μείγμα). Βάλ' το ό,τι θες.</div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">Η λίστα σου</h3>
+        <button class="btn ghost" onclick="wlLoad()">↻ Ανανέωση στατιστικών</button>
+      </div>
+      <div id="wlOut" class="dim" style="margin-top:8px">—</div>
+    </div>
+  </section>
+
+  <!-- SIGNALS / DUAL-SLEEVE ENGINE -->
+  <section id="signals" class="panel">
+    <div class="card">
+      <h3>🧠 Alpha Copilot — dual-sleeve engine</h3>
+      <div class="row">
+        <label class="dim">κατώφλι score</label>
+        <input id="egMin" class="amt" type="number" value="65" min="40" max="90">
+        <button class="btn" onclick="egLoad()">Από watchlist</button>
+        <button class="btn ghost" onclick="egLoad(true)">🔎 Auto-discover + υπολόγισε</button>
+        <span id="egSummary" class="dim" style="font-size:12px"></span>
+      </div>
+      <div class="hint">
+        <b>Sleeve A</b> = φθηνά longshot (1-5¢, ασύμμετρο upside). <b>Sleeve B</b> = value (35-65¢).
+        Score = ποιότητα + ανεξάρτητη συναίνεση, <b>de-correlated</b>, με έλεγχο whale-conflict & chased.
+        <b>Auto-discover</b> = βρίσκει μόνο του πορτοφόλια με κατευθυντικό edge (ROI≥1%, συνέπεια μήνα+all-time, rank), όχι απλά top-PnL hedgers.
+      </div>
+      <div id="egDiscovered"></div>
+    </div>
+    <div class="card" style="border-color:#5a4a1a;background:#1a1710">
+      ⚠️ <b>Το EV είναι ΜΗ ΕΠΙΚΥΡΩΜΕΝΟ.</b> Τα δημόσια δεδομένα δεν δίνουν αξιόπιστη «πραγματική πιθανότητα»
+      (οι κορυφαίοι είναι hedgers → το realized edge είναι biased). Το engine δείχνει <b>πού συγκλίνουν
+      ποιοτικά ανεξάρτητα wallets</b> — <u>δεν</u> εγγυάται κέρδος. Λείπουν από τα δεδομένα: catalyst, βάθος
+      ρευστότητας, closing-line value, hype. Αυτά κρίνε τα εσύ πριν ποντάρεις.
+    </div>
+    <div class="card"><h3>✅ Blended portfolio</h3><div id="egApproved" class="dim">Πάτα «Υπολόγισε portfolio».</div></div>
+    <div class="card"><h3>👁 Watchlist-grade (οριακά)</h3><div id="egWatch" class="dim">—</div></div>
+    <div class="card"><h3>⛔ Blacklist (απορρίψεις & λόγος)</h3><div id="egBlack" class="dim">—</div></div>
+  </section>
+
+  <!-- RADAR / KEYWORD WATCHER -->
+  <section id="radar" class="panel">
+    <div class="card">
+      <h3>🔔 Ραντάρ keywords — εντόπισε αγορές πρώτος</h3>
+      <div class="row">
+        <input id="rdKw" placeholder="keywords χωρισμένα με κόμμα, π.χ. greece, greek, gree, ελλάδα">
+        <label class="dim">poll (s)</label><input id="rdPoll" class="amt" type="number" value="20" min="5">
+        <button class="btn green" onclick="rdStart()">▶ Έναρξη</button>
+        <button class="btn red" onclick="rdStop()">■ Στοπ</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="dim"><input type="checkbox" id="rdSound" checked> 🔊 Ήχος alarm σε νέο</label>
+        <label class="dim"><input type="checkbox" id="rdOnlyNew" onchange="rdRenderCache()"> 👁 Μόνο νέα</label>
+        <span id="rdState" class="tag">—</span><span id="rdInfo" class="dim" style="font-size:12px"></span>
+      </div>
+      <div class="hint">Ψάχνει σε ολόκληρο το Polymarket + στις νεότερες αγορές. Στο πρώτο πέρασμα δείχνει τα υπάρχοντα (χωρίς alarm)· κάθε ΝΕΟ που εμφανίζεται μετά χτυπάει.</div>
+    </div>
+    <div class="card"><div id="rdList" class="dim">Βάλε keywords και πάτα «Έναρξη».</div></div>
+  </section>
+
+  <!-- NEW MARKETS FIREHOSE -->
+  <section id="newmk" class="panel">
+    <div class="card">
+      <h3>🆕 Ό,τι μόλις βγαίνει στο Polymarket</h3>
+      <div class="row">
+        <label class="dim">poll (s)</label><input id="nmPoll" class="amt" type="number" value="15" min="5">
+        <button class="btn green" onclick="nmStart()">▶ Έναρξη</button>
+        <button class="btn red" onclick="nmStop()">■ Στοπ</button>
+        <label class="dim"><input type="checkbox" id="nmSound" checked> 🔊 Ήχος</label>
+        <label class="dim"><input type="checkbox" id="nmOnlyNew" onchange="nmRenderCache()">👁 Μόνο νέα</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="nmSelectCats(true)">✓ Όλες</button>
+        <button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="nmSelectCats(false)">✕ Καμία</button>
+      </div>
+      <div class="row" style="margin-top:8px" id="nmCats"></div>
+      <div class="row" style="margin-top:8px">
+        <span id="nmState" class="tag">—</span><span id="nmInfo" class="dim" style="font-size:12px"></span>
+      </div>
+      <div class="hint">Σαρώνει ΟΛΕΣ τις νεότερες αγορές (χωρίς keyword) και τις κατηγοριοποιεί αυτόματα. Διάλεξε κατηγορίες για να φιλτράρεις.</div>
+    </div>
+    <div class="card"><div id="nmList" class="dim">Πάτα «Έναρξη».</div></div>
+  </section>
+
+  <!-- ALL MARKETS: filter + sort + paging table -->
+  <section id="allmk" class="panel">
+    <div class="card">
+      <h3>📋 Όλες οι αγορές — φίλτρο χρόνου, ταξινόμηση, σελίδες</h3>
+      <div class="row" id="amQuick"></div>
+      <div class="row" style="margin-top:8px">
+        <label class="dim">ανά σελίδα</label>
+        <select id="amPageSize">
+          <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+        </select>
+        <button class="btn" onclick="amLoad(0)">↻ Φόρτωση</button>
+        <span id="amInfo" class="dim" style="font-size:12px"></span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="amSelectCats(true)">✓ Όλες κατηγορίες</button>
+        <button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="amSelectCats(false)">✕ Καμία</button>
+      </div>
+      <div class="row" style="margin-top:8px" id="amCats"></div>
+      <div class="hint">Φιλτράρει με τις <b>επίσημες κατηγορίες του Polymarket</b> (server-side) — δείχνει π.χ. ΟΛΕΣ τις πολιτικές αγορές του διαστήματος, όχι μόνο όσες τυχαίνει να είναι στη σελίδα.</div>
+    </div>
+    <div class="card">
+      <div id="amList" class="dim">Διάλεξε φίλτρο χρόνου και πάτα «Φόρτωση».</div>
+      <div class="row" style="margin-top:10px;justify-content:center">
+        <button class="btn ghost" onclick="amPrev()">‹ Προηγούμενη</button>
+        <span id="amPageLabel" class="dim"></span>
+        <button class="btn ghost" onclick="amNext()">Επόμενη ›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- JOURNAL / CALIBRATION EXPERIMENT -->
+  <section id="journal" class="panel">
+    <div class="card">
+      <h3>📒 Το πείραμά σου — μετράει αν όντως κερδίζεις</h3>
+      <div class="hint">
+        Κάθε πόνταρισμα (DRY ή αληθινό, από όποιο flow: χειροκίνητα / engine / auto-copy) καταγράφεται εδώ.
+        Πάτα «Ανανέωση» για να λυθούν οι κλειστές αγορές και να δεις <b>πραγματικό hit-rate vs τιμή εισόδου</b>.
+        Αυτή είναι η μέθοδος «calibration first»: πρώτα μαθαίνεις αν έχεις edge, μετά μεγαλώνεις το ποσό.
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" onclick="jRefresh()">↻ Ανανέωση αποτελεσμάτων</button>
+        <span id="jNote" class="dim" style="font-size:12px"></span>
+      </div>
+    </div>
+    <div class="card"><h3>Απόδοση ανά flow</h3><div id="jStats" class="dim">—</div></div>
+    <div class="card"><h3>Ιστορικό ponταρισμάτων</h3><div id="jList" class="dim">—</div></div>
+  </section>
+
+  <!-- MARKET -->
+  <section id="market" class="panel">
+    <div class="card">
+      <div class="row">
+        <input id="mkSlug" placeholder="URL ή slug αγοράς από polymarket.com">
+        <button class="btn" onclick="loadMarket()">Άνοιγμα</button>
+      </div>
+      <div class="hint">Αντίγραψε το link μιας αγοράς από το site και κόλλα το εδώ.</div>
+    </div>
+    <div class="card"><div id="mkOut" class="dim">—</div></div>
+  </section>
+
+  <!-- COPY -->
+  <section id="copy" class="panel">
+    <div class="card" style="border-color:#1f3a2a">
+      <h3>🤖 Auto-copy ΟΛΗΣ της watchlist (καπάκι στις φθηνές αγορές τους)</h3>
+      <div class="row">
+        <label class="dim">$/trade</label><input id="acUsd" class="amt" type="number" value="2" min="1" step="0.5">
+        <label class="dim">max τιμή ¢</label><input id="acMax" class="amt" type="number" value="30" min="1" max="99">
+        <label class="dim">slippage +¢</label><input id="acSlip" class="amt" type="number" value="2" min="0" max="10">
+        <label class="dim">όριο $/μέρα</label><input id="acCap" class="amt" type="number" value="20" min="1">
+        <button class="btn green" onclick="acStart()">▶ Έναρξη</button>
+        <button class="btn red" onclick="acStop()">■ Στοπ</button>
+      </div>
+      <div class="hint">
+        Μόλις ΟΠΟΙΟΣΔΗΠΟΤΕ από τη watchlist κάνει BUY ≤ max τιμή, μπαίνει limit order στο
+        <b>δικό του entry + slippage</b> — αν η τιμή έφυγε πιο πάνω, το order περιμένει εκεί (δεν κυνηγάει).
+        π.χ. wan123 μπήκε 23¢ → εσύ limit στα 25¢. Το ημερήσιο όριο σε προστατεύει από υπερβολές.
+      </div>
+      <div class="row" style="margin-top:8px">
+        <span id="acState" class="tag">—</span><span id="acInfo" class="dim" style="font-size:12px"></span>
+      </div>
+      <div id="acLog" class="log dim" style="margin-top:8px">—</div>
+    </div>
+    <div class="card">
+      <h3>Ρυθμίσεις (copy ΕΝΟΣ wallet)</h3>
+      <div class="row">
+        <input id="cpWallet" placeholder="Wallet προς αντιγραφή 0x…">
+        <label class="dim">shares/trade</label><input id="cpShares" class="amt" type="number" value="5" min="5">
+        <label class="dim">max τιμή ¢</label><input id="cpMax" class="amt" type="number" value="10" min="1" max="99">
+        <button class="btn green" onclick="copyStart()">▶ Έναρξη</button>
+        <button class="btn red" onclick="copyStop()">■ Στοπ</button>
+      </div>
+      <div class="hint">Αντιγράφει μόνο αγορές (BUY) του target κάτω από το όριο τιμής. Τα SELL απλώς εμφανίζονται.</div>
+    </div>
+    <div class="card">
+      <h3>Κατάσταση <span id="cpState" class="tag">—</span> <span id="cpCount" class="dim"></span></h3>
+      <div id="cpLog" class="log dim">—</div>
+    </div>
+  </section>
+
+</main>
+<script>
+const $ = s => document.querySelector(s);
+// αυτόματο retry σε παροδικά network errors ("Failed to fetch" — π.χ. στιγμιαίο rate-limit)
+async function api(p, opt){
+  let lastErr;
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      const r = await fetch(p, opt);
+      return await r.json();
+    }catch(e){
+      lastErr = e;
+      await new Promise(res=>setTimeout(res, 400*(attempt+1)));
+    }
+  }
+  throw lastErr;
+}
+const fmt$ = n => (n<0?'-':'') + '$' + Math.abs(n).toLocaleString('el',{maximumFractionDigits:0});
+const pct = n => (n>=0?'+':'') + n.toFixed(1) + '%';
+const short = w => w.slice(0,6)+'…'+w.slice(-4);
+
+// tabs
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); $('#'+b.dataset.tab).classList.add('active');
+  if(b.dataset.tab==='watch') wlLoad();
+  if(b.dataset.tab==='journal') jLoad();
+  if(b.dataset.tab==='radar') rdPoll();
+  if(b.dataset.tab==='newmk'){ nmInitCats(); nmPoll(); }
+  if(b.dataset.tab==='allmk') amInitQuick();
+});
+
+// ---- keyword radar (localStorage-backed "τι είναι νέο από τελευταία φορά") ----
+const RD_SEEN_KEY = 'pmradar_seen_v1';       // {matchKey: firstSeenTs}
+const RD_KEYWORDS_KEY = 'pmradar_keywords_v1';
+const RD_LASTCHECK_KEY = 'pmradar_lastcheck_v1';
+let rdTimer = null, rdAudioCtx = null;
+
+function rdLoadSeen(){ try{ return JSON.parse(localStorage.getItem(RD_SEEN_KEY)) || {}; }catch(e){ return {}; } }
+function rdSaveSeen(obj){ localStorage.setItem(RD_SEEN_KEY, JSON.stringify(obj)); }
+
+// AudioContext ΠΡΕΠΕΙ να δημιουργείται/ξεκλειδώνεται μέσα σε click handler (user gesture),
+// αλλιώς οι browsers τον σιγάνε σιωπηλά όταν τον καλείς αργότερα από setInterval/fetch callback.
+function rdUnlockAudio(){
+  try{
+    if(!rdAudioCtx) rdAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if(rdAudioCtx.state==='suspended') rdAudioCtx.resume();
+  }catch(e){}
+}
+function beep(){
+  if(!rdAudioCtx) return;
+  try{
+    [0,0.18,0.36].forEach(t=>{
+      const o=rdAudioCtx.createOscillator(), g=rdAudioCtx.createGain();
+      o.frequency.value=880; o.connect(g); g.connect(rdAudioCtx.destination);
+      g.gain.setValueAtTime(0.001,rdAudioCtx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(0.4,rdAudioCtx.currentTime+t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,rdAudioCtx.currentTime+t+0.15);
+      o.start(rdAudioCtx.currentTime+t); o.stop(rdAudioCtx.currentTime+t+0.16);
+    });
+  }catch(e){}
+}
+
+const RD_CFG_KEY = 'pmradar_cfg_v1';
+function rdSaveCfg(running){
+  localStorage.setItem(RD_CFG_KEY, JSON.stringify({kw:$('#rdKw').value, poll:+$('#rdPoll').value, running}));
+}
+function rdLoadCfg(){ try{ return JSON.parse(localStorage.getItem(RD_CFG_KEY)); }catch(e){ return null; } }
+
+async function rdStart(){
+  rdUnlockAudio();  // ΜΕΣΑ στο click handler — εδώ ξεκλειδώνει ο ήχος
+  const kws = $('#rdKw').value.split(',').map(s=>s.trim()).filter(Boolean);
+  // αν άλλαξαν τα keywords σε σχέση με την τελευταία φορά, καθάρισε το "seen" (νέα αναζήτηση)
+  const prevKws = localStorage.getItem(RD_KEYWORDS_KEY);
+  const kwsKey = kws.slice().sort().join('|');
+  if(prevKws !== kwsKey){ rdSaveSeen({}); localStorage.setItem(RD_KEYWORDS_KEY, kwsKey); }
+  const r = await api('/api/radar/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({keywords:kws, poll:+$('#rdPoll').value})});
+  if(!r.ok){ alert(r.msg); return; }
+  rdSaveCfg(true);
+  if(rdTimer) clearInterval(rdTimer);
+  rdPoll(); rdTimer=setInterval(rdPoll, Math.max(3000,(+$('#rdPoll').value)*1000/2));
+}
+async function rdStop(){ await api('/api/radar/stop',{method:'POST'}); rdSaveCfg(false); if(rdTimer){clearInterval(rdTimer);rdTimer=null;} rdPoll(); }
+function rdRestoreCfg(){
+  const c = rdLoadCfg();
+  if(!c) return;
+  $('#rdKw').value = c.kw || '';
+  $('#rdPoll').value = c.poll || 20;
+  if(c.running && c.kw){
+    // ΔΕΝ ξεκλειδώνει ήχο εδώ (όχι click χρήστη) — μόνο ξαναρχίζει το polling.
+    // Ο ήχος θα ξεκλειδώσει μόλις ο χρήστης κάνει οποιοδήποτε κλικ στη σελίδα.
+    api('/api/radar/start',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({keywords:c.kw.split(',').map(s=>s.trim()).filter(Boolean), poll:c.poll})})
+      .then(()=>{ rdPoll(); if(rdTimer) clearInterval(rdTimer);
+                  rdTimer=setInterval(rdPoll, Math.max(3000,c.poll*1000/2)); });
+  }
+}
+
+function rdFmtWhen(ts){
+  if(!ts) return 'ποτέ';
+  const d=new Date(+ts);
+  return d.toLocaleString('el',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function rdFmtCreated(iso){
+  if(!iso) return '<span class="dim">άγνωστο</span>';
+  const d=new Date(iso);
+  return d.toLocaleString('el',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+let rdLastMatches = [];
+function rdRenderCache(){
+  const onlyNew = $('#rdOnlyNew').checked;
+  const seen = rdLoadSeen();
+  const rows = (onlyNew ? rdLastMatches.filter(m=>m.is_new) : rdLastMatches)
+    .slice().sort((a,b)=> new Date(b.created||0) - new Date(a.created||0));
+  $('#rdList').innerHTML = rows.length
+    ? '<table><tr><th></th><th>Αγορά (ανοιχτή, παίξιμη)</th><th>Keyword</th><th>Δημιουργήθηκε στο Polymarket</th><th>Πρώτη φορά είδα</th><th></th></tr>'+
+      rows.map(m=>`<tr style="${m.is_new?'background:#12210f':''}">
+        <td>${m.is_new?'<span class="tag" style="background:#1f3a1a;color:var(--green)">ΝΕΟ</span>':''}</td>
+        <td>${m.title}</td><td class="dim">${m.keyword}</td>
+        <td class="${m.is_new?'pos':'dim'}" style="font-size:12px">${rdFmtCreated(m.created)}</td>
+        <td class="dim" style="font-size:11px">${rdFmtWhen(seen[m.key])}</td>
+        <td><a href="${m.url}" target="_blank" class="wallet">άνοιγμα ↗</a></td></tr>`).join('')+'</table>'
+    : `<span class="dim">${onlyNew ? 'Καμία νέα αυτή τη στιγμή.' : 'Καμία ανοιχτή αγορά ακόμα…'}</span>`;
+}
+
+async function rdPoll(){
+  try{
+    const s = await api('/api/radar/status');
+    const st=$('#rdState');
+    st.textContent = s.running?'ΕΝΕΡΓΟ':'σταματημένο';
+    st.style.color = s.running?'var(--green)':'var(--dim)';
+
+    const seen = rdLoadSeen();
+    const now = Date.now();
+    let anyNew = false;
+    for(const m of s.matches){
+      if(!(m.key in seen)){
+        seen[m.key] = now;       // πρώτη φορά που το βλέπουμε ΠΟΤΕ σε αυτόν τον browser
+        m.is_new = true;
+        anyNew = true;
+      } else {
+        m.is_new = false;
+      }
+    }
+    rdSaveSeen(seen);
+    const lastCheck = localStorage.getItem(RD_LASTCHECK_KEY);
+    localStorage.setItem(RD_LASTCHECK_KEY, String(now));
+
+    $('#rdInfo').innerHTML = `· ${s.count} ανοιχτές αγορές · keywords: ${s.keywords.join(', ') || '—'}`
+      + `<br>Τελευταίος έλεγχος: ${rdFmtWhen(now)} <span class="dim">(προηγούμενος: ${rdFmtWhen(lastCheck)})</span>`;
+
+    if(anyNew && $('#rdSound').checked) beep();
+
+    rdLastMatches = s.matches;
+    rdRenderCache();
+  }catch(e){}
+}
+
+// ---- new markets firehose (χωρίς keyword, με category checkboxes) ----
+const NM_SEEN_KEY = 'pmnewmk_seen_v1';
+const NM_CATS = ['Πολιτική','Οικονομία','Κρύπτο','Γεωπολιτική','Tech/Elon','Αθλητικά','Άλλα'];
+let nmTimer = null, nmLastItems = [];
+
+function nmLoadSeen(){ try{ return JSON.parse(localStorage.getItem(NM_SEEN_KEY)) || {}; }catch(e){ return {}; } }
+function nmSaveSeen(o){ localStorage.setItem(NM_SEEN_KEY, JSON.stringify(o)); }
+
+function nmInitCats(){
+  if($('#nmCats').children.length) return;
+  $('#nmCats').innerHTML = NM_CATS.map(c=>
+    `<label class="dim"><input type="checkbox" class="nmCatBox" value="${c}" checked onchange="nmRenderCache(); nmPersistIfRunning()"> ${c} <span class="nmCatCount dim" data-cat="${c}"></span></label>`
+  ).join(' ');
+}
+function nmUpdateCatCounts(){
+  const counts = {};
+  for(const m of nmLastItems) counts[m.category] = (counts[m.category]||0)+1;
+  document.querySelectorAll('.nmCatCount').forEach(el=>{
+    const n = counts[el.dataset.cat] || 0;
+    el.textContent = `(${n})`;
+    el.parentElement.style.opacity = n ? '1' : '0.45';
+  });
+}
+function nmPersistIfRunning(){
+  const c = nmLoadCfg();
+  if(c && c.running) nmSaveCfg(true);
+}
+function nmSelectCats(all){
+  document.querySelectorAll('.nmCatBox').forEach(cb=>cb.checked=all);
+  nmRenderCache(); nmPersistIfRunning();
+}
+function nmActiveCats(){
+  return [...document.querySelectorAll('.nmCatBox:checked')].map(x=>x.value);
+}
+
+const NM_CFG_KEY = 'pmnewmk_cfg_v1';
+function nmSaveCfg(running){
+  nmInitCats();
+  localStorage.setItem(NM_CFG_KEY, JSON.stringify({
+    poll:+$('#nmPoll').value, cats:nmActiveCats(), running,
+  }));
+}
+function nmLoadCfg(){ try{ return JSON.parse(localStorage.getItem(NM_CFG_KEY)); }catch(e){ return null; } }
+
+async function nmStart(){
+  rdUnlockAudio();
+  nmInitCats();
+  // δίχτυ ασφαλείας: ποτέ μην ξεκινάς με 0 κατηγορίες επιλεγμένες (θα φαινόταν "χαλασμένο")
+  if(nmActiveCats().length === 0){
+    document.querySelectorAll('.nmCatBox').forEach(cb=>cb.checked=true);
+    $('#nmInfo').innerHTML = '<span class="tag" style="color:var(--yellow)">καμία κατηγορία δεν ήταν επιλεγμένη — επέλεξα όλες αυτόματα</span>';
+  }
+  const r = await api('/api/newmarkets/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({poll:+$('#nmPoll').value})});
+  if(!r.ok){ alert(r.msg); return; }
+  nmSaveCfg(true);
+  if(nmTimer) clearInterval(nmTimer);
+  nmPoll(); nmTimer=setInterval(nmPoll, Math.max(3000,(+$('#nmPoll').value)*1000/2));
+}
+async function nmStop(){ await api('/api/newmarkets/stop',{method:'POST'}); nmSaveCfg(false); if(nmTimer){clearInterval(nmTimer);nmTimer=null;} nmPoll(); }
+
+function nmRestoreCfg(){
+  nmInitCats();
+  const c = nmLoadCfg();
+  if(!c) return;
+  $('#nmPoll').value = c.poll || 15;
+  const noCats = !c.cats || c.cats.length === 0;
+  document.querySelectorAll('.nmCatBox').forEach(cb=>{ cb.checked = noCats || c.cats.includes(cb.value); });
+  if(c.running){
+    api('/api/newmarkets/start',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({poll:c.poll})})
+      .then(()=>{ nmPoll(); if(nmTimer) clearInterval(nmTimer);
+                  nmTimer=setInterval(nmPoll, Math.max(3000,c.poll*1000/2)); });
+  }
+}
+
+function nmRenderCache(){
+  nmInitCats();
+  nmUpdateCatCounts();
+  const cats = nmActiveCats();
+  const onlyNew = $('#nmOnlyNew').checked;
+  let rows = nmLastItems.filter(m => cats.includes(m.category));
+  if(onlyNew) rows = rows.filter(m=>m.is_new);
+  rows = rows.slice().sort((a,b)=> new Date(b.created||0) - new Date(a.created||0));
+  $('#nmList').innerHTML = rows.length
+    ? '<table><tr><th></th><th>Αγορά</th><th>Κατηγορία</th><th>Δημιουργήθηκε</th><th></th></tr>'+
+      rows.map(m=>`<tr style="${m.is_new?'background:#12210f':''}">
+        <td>${m.is_new?'<span class="tag" style="background:#1f3a1a;color:var(--green)">ΝΕΟ</span>':''}</td>
+        <td>${m.title}</td><td><span class="tag">${m.category}</span></td>
+        <td class="dim" style="font-size:12px">${rdFmtCreated(m.created)}</td>
+        <td><a href="${m.url}" target="_blank" class="wallet">άνοιγμα ↗</a></td></tr>`).join('')+'</table>'
+    : '<span class="dim">Καμία αγορά με αυτά τα φίλτρα ακόμα…</span>';
+}
+
+async function nmPoll(){
+  try{
+    nmInitCats();
+    const s = await api('/api/newmarkets/status');
+    const st=$('#nmState');
+    st.textContent = s.running?'ΕΝΕΡΓΟ':'σταματημένο';
+    st.style.color = s.running?'var(--green)':'var(--dim)';
+    const seen = nmLoadSeen();
+    const now = Date.now();
+    let anyNew=false;
+    for(const m of s.items){
+      if(!(m.key in seen)){ seen[m.key]=now; m.is_new=true; anyNew=true; }
+      else m.is_new=false;
+    }
+    nmSaveSeen(seen);
+    $('#nmInfo').textContent = `· ${s.count} αγορές συνολικά στη μνήμη`;
+    if(anyNew && $('#nmSound').checked) beep();
+    nmLastItems = s.items;
+    nmRenderCache();
+  }catch(e){}
+}
+
+// ---- all markets: filter/sort/paging table ----
+const AM_FILTERS = [
+  {label:'1ω', h:1}, {label:'2ω', h:2}, {label:'4ω', h:4}, {label:'6ω', h:6},
+  {label:'12ω', h:12}, {label:'24ω', h:24}, {label:'Εβδομάδα', h:168},
+  {label:'Μήνας', h:720}, {label:'Τελευταία', h:null},
+];
+let amSinceHours = null, amOffset = 0, amAscending = false, amHasMore = false, amLastItems = [];
+
+function amInitQuick(){
+  if($('#amQuick').children.length) return;
+  $('#amQuick').innerHTML = AM_FILTERS.map((f,i)=>
+    `<button class="btn ${f.h===amSinceHours?'':'ghost'}" data-h="${i}" onclick="amSetFilter(${i})">${f.label}</button>`
+  ).join(' ');
+  amInitCats();
+}
+const AM_CATS = ['Πολιτική','Οικονομία','Κρύπτο','Γεωπολιτική','Tech','Αθλητικά','Κουλτούρα'];
+function amInitCats(){
+  if($('#amCats').children.length) return;
+  $('#amCats').innerHTML = AM_CATS.map(c=>
+    `<label class="dim"><input type="checkbox" class="amCatBox" value="${c}" checked onchange="amLoad(0)"> ${c}</label>`
+  ).join(' ');
+}
+function amActiveCats(){ return [...document.querySelectorAll('.amCatBox:checked')].map(x=>x.value); }
+function amSelectCats(all){
+  amInitCats();
+  document.querySelectorAll('.amCatBox').forEach(cb=>cb.checked=all);
+  amLoad(0);
+}
+function amSetFilter(i){
+  amSinceHours = AM_FILTERS[i].h;
+  document.querySelectorAll('#amQuick button').forEach((b,idx)=> b.className = 'btn ' + (idx===i?'':'ghost'));
+  amLoad(0);
+}
+function amToggleSort(){ amAscending = !amAscending; amLoad(amOffset); }
+
+async function amLoad(offset){
+  amInitQuick();
+  amOffset = Math.max(0, offset);
+  const out = $('#amList');
+  out.textContent = 'Φόρτωση…';
+  // δίχτυ ασφαλείας: καμία κατηγορία = όλες
+  let cats = amActiveCats();
+  let autoFixed = false;
+  if(cats.length === 0){
+    document.querySelectorAll('.amCatBox').forEach(cb=>cb.checked=true);
+    cats = amActiveCats(); autoFixed = true;
+  }
+  const allSelected = cats.length === AM_CATS.length;
+  try{
+    const limit = +$('#amPageSize').value;
+    const params = new URLSearchParams({limit, offset: amOffset, ascending: amAscending});
+    if(amSinceHours) params.set('since_hours', amSinceHours);
+    // αν δεν είναι όλες επιλεγμένες, στέλνε server-side tag filter
+    if(!allSelected) params.set('cats', cats.join(','));
+    const r = await api('/api/allmarkets?'+params.toString());
+    amHasMore = r.items.length >= limit;
+    amLastItems = r.items;
+    $('#amPageLabel').textContent = `σελίδα ${Math.floor(amOffset/limit)+1}`;
+    $('#amInfo').innerHTML = `${r.items.length} αγορές σε αυτή τη σελίδα`
+      + (autoFixed ? ' <span class="tag" style="color:var(--yellow)">καμία κατηγορία — επέλεξα όλες</span>' : '');
+    if(!r.items.length){
+      out.innerHTML = `<span class="dim">Καμία αγορά με αυτά τα φίλτρα.${amSinceHours?' Δοκίμασε μεγαλύτερο διάστημα ή «Τελευταία».':''}</span>`;
+      return;
+    }
+    let h = `<table><tr><th>Αγορά</th>
+      <th style="cursor:pointer" onclick="amToggleSort()">Δημιουργήθηκε ${amAscending?'▲':'▼'}</th><th></th></tr>`;
+    for(const m of r.items){
+      h += `<tr><td>${m.title}</td>
+        <td class="dim" style="font-size:12px">${rdFmtCreated(m.created)}</td>
+        <td><a href="${m.url}" target="_blank" class="wallet">άνοιγμα ↗</a></td></tr>`;
+    }
+    out.innerHTML = h+'</table>';
+  }catch(e){ out.textContent = 'Σφάλμα: '+e; }
+}
+function amPrev(){ if(amOffset>0) amLoad(Math.max(0, amOffset-(+$('#amPageSize').value))); }
+function amNext(){ if(amHasMore) amLoad(amOffset+(+$('#amPageSize').value)); }
+
+// ---- calibration journal ----
+function jRender(r){
+  const st=r.stats||{};
+  let h='<table><tr><th>Flow</th><th>ponτ.</th><th>λυμένα</th><th>hit%</th><th>μ.είσοδος</th><th>edge</th><th>PnL (ως λήξη)</th><th>έβαλες</th></tr>';
+  for(const k of Object.keys(st)){
+    const s=st[k];
+    const edge = s.edge_pp==null?'—':(s.edge_pp>=0?'+':'')+s.edge_pp+'pp';
+    const pnl = s.pnl==null?'—':(s.pnl>=0?'+$':'-$')+Math.abs(s.pnl).toFixed(2);
+    h+=`<tr><td><b>${k}</b></td><td>${s.bets}</td><td>${s.resolved}</td>
+      <td>${s.hit==null?'—':s.hit+'%'}</td><td class="dim">${s.mean_entry_c==null?'—':s.mean_entry_c+'¢'}</td>
+      <td class="${(s.edge_pp||0)>=0?'pos':'neg'}">${edge}</td>
+      <td class="${(s.pnl||0)>=0?'pos':'neg'}">${pnl}</td><td class="dim">$${s.staked}</td></tr>`;
+  }
+  $('#jStats').innerHTML=h+'</table><div class="hint">edge = hit% − μέση τιμή εισόδου. >0 σε αρκετά λυμένα = πραγματικό σημάδι edge.</div>';
+  const es=r.entries||[];
+  $('#jList').innerHTML = es.length
+    ? '<table><tr><th>Ημ/νία</th><th>Flow</th><th>Επιλογή</th><th>Τιμή</th><th>$</th><th>Αγορά</th><th>Έκβαση</th></tr>'+
+      es.map(e=>{
+        const d=new Date(e.ts*1000).toLocaleString('el',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+        const res = e.result==null?'<span class="dim">ανοιχτό</span>':(e.result?'<span class="pos">✅ κέρδισε</span>':'<span class="neg">❌ έχασε</span>');
+        return `<tr><td class="dim mono">${d}${e.dry?' <span class="tag">dry</span>':''}</td><td class="dim">${e.source}</td>
+          <td>${e.outcome||''}</td><td>${(e.price*100).toFixed(1)}¢</td><td>$${e.cost}</td>
+          <td class="dim">${(e.title||'').slice(0,32)}</td><td>${res}</td></tr>`;
+      }).join('')+'</table>'
+    : '<span class="dim">Κανένα πόνταρισμα ακόμα. Κάνε ένα «Αγορά» (έστω DRY) και θα εμφανιστεί εδώ.</span>';
+}
+async function jLoad(){ try{ jRender(await api('/api/journal')); }catch(e){ $('#jStats').textContent='Σφάλμα: '+e; } }
+async function jRefresh(){
+  $('#jNote').textContent='Ελέγχω ποιες αγορές έκλεισαν…';
+  try{ const r=await api('/api/journal/refresh'); $('#jNote').textContent=`${r.changed} νέα αποτελέσματα`; jRender(r); }
+  catch(e){ $('#jNote').textContent='Σφάλμα: '+e; }
+}
+
+async function checkAccount(){
+  try{
+    const a = await api('/api/account');
+    if(a.error){ alert('Σύνδεση απέτυχε:\n'+a.error+'\n\nΈλεγξε PRIVATE_KEY/FUNDER_ADDRESS στο .env.'); return; }
+    alert(`✅ Συνδέθηκε!\n\nΔιεύθυνση: ${a.address}\nFunder: ${a.funder}\nΥπόλοιπο USDC: ${a.usdc_balance}\n\n(κανένα order δεν μπήκε — μόνο ανάγνωση)`);
+  }catch(e){ alert('Σφάλμα: '+e); }
+}
+
+async function loadConfig(){
+  const c = await api('/api/config');
+  const m = $('#mode');
+  if(c.dry_run){ m.className='badge dry'; m.textContent='DRY_RUN'; $('#modehint').textContent='δοκιμαστικά — δεν μπαίνουν πραγματικά orders'; }
+  else { m.className='badge live'; m.textContent='● ΖΩΝΤΑΝΑ'; $('#modehint').textContent='ΠΡΟΣΟΧΗ: μπαίνουν αληθινά orders με τα λεφτά σου'; }
+  window.MIN_SHARES = c.min_shares;
+}
+
+async function loadBoard(){
+  const out = $('#boardOut'); out.textContent='Φόρτωση…';
+  try{
+    const rows = await api(`/api/leaderboard?period=${$('#lbPeriod').value}&by=${$('#lbBy').value}`);
+    if(!rows.length){ out.textContent='Κανένα αποτέλεσμα.'; return; }
+    let h = '<table><tr><th>#</th><th>Wallet</th><th>Κέρδος</th><th>Τζίρος</th><th></th></tr>';
+    for(const r of rows){
+      const pnl = +r.pnl||0;
+      h += `<tr>
+        <td>${r.rank}</td>
+        <td><span class="wallet" onclick="gotoTrader('${r.proxyWallet}')">${short(r.proxyWallet)}</span></td>
+        <td class="${pnl>=0?'pos':'neg'}">${fmt$(pnl)}</td>
+        <td class="dim">${fmt$(+r.vol||0)}</td>
+        <td>
+          <button class="btn ghost" onclick="gotoTrader('${r.proxyWallet}')">Χαρτοφυλάκιο</button>
+          <button class="btn ghost" title="Προσθήκη στη watchlist" onclick="wlQuickAdd('${r.proxyWallet}','#${r.rank}')">⭐</button>
+          <button class="btn" onclick="gotoCopy('${r.proxyWallet}')">Copy</button>
+        </td></tr>`;
+    }
+    out.innerHTML = h+'</table>';
+  }catch(e){ out.textContent='Σφάλμα: '+e; }
+}
+
+function gotoTrader(w){ document.querySelector('[data-tab=trader]').click(); $('#trWallet').value=w; loadTrader(); }
+function gotoCopy(w){ document.querySelector('[data-tab=copy]').click(); $('#cpWallet').value=w; }
+
+async function searchProfiles(){
+  const q = $('#trSearch').value.trim(); if(!q) return;
+  const out = $('#searchOut'); out.innerHTML = '<div class="dim">Αναζήτηση…</div>';
+  try{
+    const rows = await api('/api/search?q='+encodeURIComponent(q));
+    if(!rows.length){ out.innerHTML = '<div class="dim">Καμία αντιστοιχία.</div>'; return; }
+    out.innerHTML = rows.map(p => `
+      <div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:8px">
+          ${p.profileImage ? `<img src="${p.profileImage}" style="width:28px;height:28px;border-radius:50%">` : ''}
+          <div><b>${p.name||p.pseudonym}</b> <span class="dim mono">${short(p.proxyWallet)}</span></div>
+        </div>
+        <button class="btn ghost" onclick="gotoTrader('${p.proxyWallet}')">Δες</button>
+      </div>`).join('');
+  }catch(e){ out.innerHTML = 'Σφάλμα: '+e; }
+}
+
+async function loadTrader(){
+  const w = $('#trWallet').value.trim(); if(!w) return;
+  $('#trWalletLabel').innerHTML = short(w) + ` <button class="btn ghost" title="Προσθήκη στη watchlist" onclick="wlQuickAdd('${w}','')">⭐ watchlist</button>`;
+  $('#posOut').textContent='Φόρτωση…';
+  try{
+    const pos = await api('/api/positions?wallet='+w);
+    if(!pos.length){ $('#posOut').textContent='Καμία ανοιχτή θέση.'; }
+    else{
+      let h='<table><tr><th>Αγορά</th><th>Επιλογή</th><th>Μερίδια</th><th>Μ.Τιμή</th><th>Τώρα</th><th>Αξία</th><th>P&L</th></tr>';
+      for(const p of pos.slice(0,40)){
+        const pnl=+p.cashPnl||0;
+        h+=`<tr><td>${(p.title||'').slice(0,42)}</td><td>${p.outcome}</td>
+          <td>${(+p.size).toFixed(1)}</td><td>${(p.avgPrice*100).toFixed(0)}¢</td>
+          <td>${(p.curPrice*100).toFixed(0)}¢</td><td>${fmt$(+p.currentValue||0)}</td>
+          <td class="${pnl>=0?'pos':'neg'}">${fmt$(pnl)} <span class="dim">${pct(+p.percentPnl||0)}</span></td></tr>`;
+      }
+      $('#posOut').innerHTML=h+'</table>';
+    }
+  }catch(e){ $('#posOut').textContent='Σφάλμα: '+e; }
+  await loadTrades();
+}
+
+async function loadTrades(){
+  const w = $('#trWallet').value.trim(); if(!w) return;
+  const sel = $('#trLimit').value;
+  const out = $('#trOut'); out.textContent='Φόρτωση…';
+  try{
+    const url = sel==='all' ? `/api/trades?wallet=${w}&all=1` : `/api/trades?wallet=${w}&limit=${sel}`;
+    const tr = await api(url);
+    if(!tr.length){ out.textContent='Κανένα trade.'; return; }
+    let h=`<div class="hint">${tr.length} trades${sel==='all' && tr.length>=5000 ? ' (πρώτα 5000)' : ''}</div>`;
+    h+='<table><tr><th>Ώρα</th><th></th><th>Μερίδια</th><th>Τιμή</th><th>Επιλογή</th><th>Αγορά</th><th></th></tr>';
+    for(const t of tr){
+      const d=new Date((+t.timestamp)*1000).toLocaleString('el',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const buy=t.side==='BUY';
+      const cp = buy ? `<button class="btn ghost" onclick="copyTrade('${t.asset}',${t.price},'${(t.outcome||'').replace(/'/g,'')}')">Copy</button>` : '';
+      h+=`<tr><td class="dim mono">${d}</td>
+        <td class="${buy?'pos':'neg'}">${t.side}</td>
+        <td>${(+t.size).toFixed(1)}</td><td>${(t.price*100).toFixed(0)}¢</td>
+        <td>${t.outcome}</td><td class="dim">${(t.title||'').slice(0,40)}</td>
+        <td>${cp}</td></tr>`;
+    }
+    out.innerHTML=h+'</table>';
+  }catch(e){ out.textContent='Σφάλμα: '+e; }
+}
+
+async function loadMarket(){
+  const s=$('#mkSlug').value.trim(); if(!s) return;
+  const out=$('#mkOut'); out.textContent='Φόρτωση…';
+  try{
+    const mk=await api('/api/market?slug='+encodeURIComponent(s));
+    if(!mk.length){ out.textContent='Δεν βρέθηκε αγορά.'; return; }
+    let h='';
+    for(const m of mk){
+      h+=`<h3>${m.question}</h3><table><tr><th>Επιλογή</th><th>Τιμή</th><th>Μερίδια</th><th>Τιμή ¢</th><th></th></tr>`;
+      for(const o of m.outcomes){
+        const id='b_'+Math.random().toString(36).slice(2,8);
+        h+=`<tr><td>${o.name}</td><td>${(o.price*100).toFixed(1)}¢</td>
+          <td><input class="amt" id="sh_${id}" type="number" value="${window.MIN_SHARES||5}" min="${window.MIN_SHARES||5}"></td>
+          <td><input class="amt" id="ct_${id}" type="number" value="${Math.max(1,Math.round(o.price*100))}" min="1" max="99"></td>
+          <td><button class="btn" onclick="buy('${o.token_id}','${id}','${o.name.replace(/'/g,'')}')">Αγορά</button></td></tr>`;
+      }
+      h+='</table>';
+    }
+    out.innerHTML=h;
+  }catch(e){ out.textContent='Σφάλμα: '+e; }
+}
+
+async function buy(token,id,name){
+  const shares=+$('#sh_'+id).value, cents=+$('#ct_'+id).value;
+  if(!confirm(`Αγορά ${shares} μεριδίων «${name}» στα ${cents}¢ (~$${(shares*cents/100).toFixed(2)});`)) return;
+  try{
+    const r=await api('/api/buy',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token_id:token,cents,shares})});
+    if(r.error){ alert('Σφάλμα: '+r.error); return; }
+    alert(r.dry_run ? `DRY_RUN: θα έμπαινε order ${shares}@${cents}¢ (~$${r.cost}). Δεν μπήκε πραγματικά.`
+                    : `Order μπήκε! Κόστος ~$${r.cost}\n${r.resp}`);
+  }catch(e){ alert('Σφάλμα: '+e); }
+}
+
+// ---- copy ένα συγκεκριμένο trade με κουμπί ----
+async function copyTrade(token, price, name, source){
+  const cents = Math.max(1, Math.min(99, Math.round(price*100)));
+  const shares = +prompt(`Πόσα μερίδια «${name}» στα ${cents}¢;`, window.MIN_SHARES||5);
+  if(!shares || shares < (window.MIN_SHARES||5)) return;
+  try{
+    const r=await api('/api/buy',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token_id:token,cents,shares,source:source||'copy-button',outcome:name})});
+    if(r.error){ alert('Σφάλμα: '+r.error); return; }
+    alert(r.dry_run ? `DRY_RUN: θα έμπαινε ${shares}@${cents}¢ (~$${r.cost}). Καταγράφηκε στο 📒 Πείραμα.`
+                    : `Order μπήκε! ~$${r.cost} — καταγράφηκε στο 📒 Πείραμα.`);
+  }catch(e){ alert('Σφάλμα: '+e); }
+}
+
+// ---- watchlist ----
+async function wlQuickAdd(wallet, label){
+  await api('/api/watchlist/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({wallet, label, weight:1})});
+  alert(`Προστέθηκε στη watchlist: ${label||wallet.slice(0,8)}`);
+}
+async function wlAdd(){
+  const wallet=$('#wlWallet').value.trim(); if(!wallet) return;
+  await api('/api/watchlist/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({wallet, label:$('#wlLabel').value.trim(), weight:+$('#wlWeight').value})});
+  $('#wlWallet').value=''; $('#wlLabel').value=''; wlLoad();
+}
+async function wlRemove(wallet){
+  if(!confirm('Αφαίρεση από watchlist;')) return;
+  await api('/api/watchlist/remove',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({wallet})});
+  wlLoad();
+}
+async function wlLoad(){
+  const out=$('#wlOut'); out.textContent='Φόρτωση στατιστικών…';
+  try{
+    const rows=await api('/api/watchlist/stats');
+    if(!rows.length){ out.innerHTML='<span class="dim">Άδεια — πρόσθεσε traders πιο πάνω (ή ⭐ από τα Κορυφαίοι/Trader).</span>'; return; }
+    let h='<table><tr><th>Ετικέτα</th><th>Wallet</th><th>Βάρος</th><th>Κέρδος (all-time)</th><th>ROI</th><th>Rank</th><th></th></tr>';
+    for(const r of rows){
+      const pnl=+r.pnl||0;
+      h+=`<tr><td><b>${r.label}</b>${r.userName?` <span class="dim">${r.userName}</span>`:''}</td>
+        <td><span class="wallet" onclick="gotoTrader('${r.wallet}')">${short(r.wallet)}</span></td>
+        <td>${r.weight}</td>
+        <td class="${pnl>=0?'pos':'neg'}">${fmt$(pnl)}</td>
+        <td class="${(r.roi||0)>=0?'pos':'neg'}">${r.roi==null?'—':r.roi+'%'}</td>
+        <td class="dim">${r.rank?('#'+r.rank):'—'}</td>
+        <td><button class="btn ghost" onclick="wlRemove('${r.wallet}')">✕</button></td></tr>`;
+    }
+    out.innerHTML=h+'</table>';
+  }catch(e){ out.textContent='Σφάλμα: '+e; }
+}
+
+// ---- dual-sleeve engine ----
+function sleeveTag(s){ return s==='A'
+  ? '<span class="tag" style="background:#2a1f10;color:#d29922">A·longshot</span>'
+  : '<span class="tag" style="background:#102a1f;color:#3fb950">B·value</span>'; }
+
+async function egLoad(auto){
+  const out=$('#egApproved');
+  const t0=Date.now();
+  const timer=setInterval(()=>{
+    const s=Math.round((Date.now()-t0)/1000);
+    out.innerHTML = (auto
+      ? `🔎 Auto-discovery… ψάχνω πορτοφόλια με κατευθυντικό edge και τα αναλύω`
+      : `Υπολογισμός… (διαβάζω θέσεις, κλειστές θέσεις & στατιστικά όλων)`)
+      + `<br><span class="dim">${s}s — συνήθως 20-45s, μία κλήση/wallet στο Polymarket API. Μην κλείσεις την καρτέλα.</span>`;
+  },500);
+  $('#egWatch').textContent='…'; $('#egBlack').textContent='…'; $('#egDiscovered').innerHTML='';
+  try{
+    const r=await api((auto?'/api/engine/auto?n=12&min_score=':'/api/engine?min_score=')+$('#egMin').value);
+    clearInterval(timer);
+    if(r.note==='empty_watchlist'){ out.innerHTML='<span class="dim">Άδεια watchlist — πρόσθεσε traders στην καρτέλα ⭐ ή πάτα «Auto-discover».</span>'; $('#egWatch').textContent='—'; $('#egBlack').textContent='—'; return; }
+    if(r.note==='no_wallets_found'){ out.innerHTML='<span class="dim">Δεν βρέθηκαν πορτοφόλια με τα κριτήρια.</span>'; return; }
+    // discovered wallets table (auto mode)
+    if(r.discovered && r.discovered.length){
+      let d='<div class="card" style="margin:0 0 8px"><h3 style="margin:0 0 8px">🔎 Πορτοφόλια που βρέθηκαν</h3><table><tr><th>Score</th><th>Όνομα</th><th>Rank</th><th>ROI</th><th>PnL</th><th>Συνέπεια</th><th></th></tr>';
+      for(const w of r.discovered){
+        d+=`<tr><td><b>${w.discovery_score}</b></td><td>${w.name}</td><td class="dim">#${w.best_rank}</td>
+          <td class="pos">${w.roi}%</td><td class="pos">${fmt$(w.pnl)}</td>
+          <td>${w.consistency>=1?'✅ μήνα+all-time':'μερική'}</td>
+          <td><button class="btn ghost" onclick="wlQuickAdd('${w.wallet}','${w.name}')">⭐</button></td></tr>`;
+      }
+      $('#egDiscovered').innerHTML=d+'</table></div>';
+    }
+    const s=r.summary;
+    $('#egSummary').textContent = `${s.n_candidates} candidates → ${s.n_approved} approved · A:${s.sleeveA_exposure}% B:${s.sleeveB_exposure}%`;
+    // approved
+    if(s.standby || !r.approved.length){
+      out.innerHTML='<b style="color:var(--yellow)">Standby.</b> <span class="dim">Λιγότερα από 2 πραγματικά σήματα πέρασαν τα φίλτρα. Σιωπή = στρατηγική.</span>';
+    } else {
+      let h='<table><tr><th>Sleeve</th><th>Score</th><th>Επιλογή</th><th>Τιμή</th><th>n</th><th>Ποιότητα</th><th>Alloc</th><th>Ποιοι</th><th>Αγορά</th><th>Κατηγορία</th></tr>';
+      for(const c of r.approved){
+        const who=c.supporters.map(x=>`${x.name}(Q${x.quality},$${(x.usd/1000).toFixed(1)}k)`).join('<br>');
+        h+=`<tr>
+          <td>${sleeveTag(c.sleeve)}</td>
+          <td><b style="color:var(--green)">${c.score}</b></td>
+          <td>${c.outcome}</td>
+          <td>${(c.price*100).toFixed(1)}¢</td>
+          <td>${c.indep_n}👤</td>
+          <td class="dim">${c.avg_quality}</td>
+          <td><b>${c.alloc_pct}%</b></td>
+          <td class="dim" style="font-size:11px">${who}</td>
+          <td><button class="btn" onclick="copyTrade('${c.token}',${c.price},'${(c.outcome||'').replace(/'/g,'')}','engine')">Αγορά</button></td>
+          <td class="dim" style="font-size:11px">${(c.market||'').slice(0,30)}<br><span class="tag">${c.category}</span></td>
+        </tr>`;
+      }
+      out.innerHTML=h+'</table>';
+    }
+    // watch
+    $('#egWatch').innerHTML = r.watch.length
+      ? '<table><tr><th>Sleeve</th><th>Score</th><th>Επιλογή</th><th>Τιμή</th><th>n</th><th>Αγορά</th></tr>'+
+        r.watch.map(c=>`<tr><td>${sleeveTag(c.sleeve)}</td><td>${c.score}</td><td>${c.outcome}</td><td>${(c.price*100).toFixed(1)}¢</td><td>${c.indep_n}👤</td><td class="dim">${(c.market||'').slice(0,34)}</td></tr>`).join('')+'</table>'
+      : '<span class="dim">—</span>';
+    // blacklist
+    $('#egBlack').innerHTML = r.blacklist.length
+      ? '<table><tr><th>Sleeve</th><th>Επιλογή</th><th>Τιμή</th><th>Λόγος απόρριψης</th></tr>'+
+        r.blacklist.map(c=>`<tr><td>${sleeveTag(c.sleeve)}</td><td>${c.outcome}</td><td>${(c.price*100).toFixed(1)}¢</td><td class="neg" style="font-size:12px">${c.reason}</td></tr>`).join('')+'</table>'
+      : '<span class="dim">—</span>';
+  }catch(e){ clearInterval(timer); out.textContent='Σφάλμα: '+e; }
+}
+
+// ---- auto-copy όλης της watchlist ----
+async function acStart(){
+  const r=await api('/api/autocopy/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({usd:+$('#acUsd').value,max_cents:+$('#acMax').value,
+                         slip_cents:+$('#acSlip').value,daily_cap:+$('#acCap').value})});
+  if(!r.ok) alert(r.msg);
+  pollAuto();
+}
+async function acStop(){ await api('/api/autocopy/stop',{method:'POST'}); pollAuto(); }
+async function pollAuto(){
+  try{
+    const s=await api('/api/autocopy/status');
+    const st=$('#acState');
+    st.textContent = s.running ? ('ΕΝΕΡΓΟ '+(s.dry_run?'(dry)':'(ζωντανά)')) : 'σταματημένο';
+    st.style.color = s.running ? 'var(--green)' : 'var(--dim)';
+    $('#acInfo').textContent = s.running || s.mirrored
+      ? `· ${s.n_wallets} wallets · καπάκια: ${s.mirrored} · ξοδεύτηκαν $${s.spent_today}/${s.cfg.daily_cap}`
+      : '';
+    $('#acLog').innerHTML = s.log.length ? s.log.map(l=>`<div><span class="dim">${l.t}</span> ${l.msg}</div>`).join('') : '—';
+  }catch(e){}
+}
+
+async function copyStart(){
+  const r=await api('/api/copy/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({wallet:$('#cpWallet').value.trim(),shares:+$('#cpShares').value,max_cents:+$('#cpMax').value})});
+  if(!r.ok) alert(r.msg);
+  pollCopy();
+}
+async function copyStop(){ await api('/api/copy/stop',{method:'POST'}); pollCopy(); }
+
+async function pollCopy(){
+  try{
+    const s=await api('/api/copy/status');
+    const st=$('#cpState');
+    st.textContent = s.running ? ('ΕΝΕΡΓΟ '+(s.dry_run?'(dry)':'(ζωντανά)')) : 'σταματημένο';
+    st.style.background = s.running ? '#1f2a1a' : '#21262d';
+    st.style.color = s.running ? 'var(--green)' : 'var(--dim)';
+    $('#cpCount').textContent = s.wallet ? `· ${short(s.wallet)} · αντιγράφηκαν: ${s.mirrored}` : '';
+    $('#cpLog').innerHTML = s.log.length ? s.log.map(l=>`<div><span class="dim">${l.t}</span> ${l.msg}</div>`).join('') : '—';
+  }catch(e){}
+}
+
+loadConfig();
+nmInitCats();
+rdRestoreCfg();
+nmRestoreCfg();
+// αν το polling ξαναξεκίνησε αυτόματα (όχι μέσω click), ξεκλείδωσε τον ήχο στο ΠΡΩΤΟ οποιοδήποτε κλικ στη σελίδα
+document.addEventListener('click', rdUnlockAudio, {once:true});
+setInterval(()=>{ if($('#copy').classList.contains('active')){ pollCopy(); pollAuto(); } }, 3000);
+</script>
+</body>
+</html>
