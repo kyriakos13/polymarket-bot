@@ -904,8 +904,17 @@ async function egLoad(auto){
   },500);
   $('#egWatch').textContent='…'; $('#egBlack').textContent='…'; $('#egDiscovered').innerHTML='';
   try{
-    const r=await api((auto?'/api/engine/auto?n=12&min_score=':'/api/engine?min_score=')+$('#egMin').value);
+    // ξεκίνα background job — μετά poll (κανένα request δεν κρεμάει, άρα ΟΧΙ "failed to fetch")
+    await api(`/api/engine/start?mode=${auto?'auto':'watchlist'}&n=12&min_score=${$('#egMin').value}`);
+    let r = null;
+    for(let i=0; i<120; i++){          // έως ~3 λεπτά
+      await new Promise(res=>setTimeout(res, 1500));
+      const st = await api('/api/engine/status');
+      if(st.error){ clearInterval(timer); out.innerHTML='Σφάλμα: '+st.error; return; }
+      if(st.done){ r = st.result; break; }
+    }
     clearInterval(timer);
+    if(!r){ out.innerHTML='<span class="dim">Πήρε πολλή ώρα — δοκίμασε ξανά.</span>'; return; }
     if(r.note==='empty_watchlist'){ out.innerHTML='<span class="dim">Άδεια watchlist — πρόσθεσε traders στην καρτέλα ⭐ ή πάτα «Auto-discover».</span>'; $('#egWatch').textContent='—'; $('#egBlack').textContent='—'; return; }
     if(r.note==='no_wallets_found'){ out.innerHTML='<span class="dim">Δεν βρέθηκαν πορτοφόλια με τα κριτήρια.</span>'; return; }
     // discovered wallets table (auto mode)

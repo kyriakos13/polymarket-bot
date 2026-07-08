@@ -313,6 +313,50 @@ class AutoCopyManager:
 autocopy_mgr = AutoCopyManager()
 
 
+class EngineRunner:
+    """Τρέχει το engine (auto-discover ή watchlist) σε background thread ώστε το UI
+    να μη περιμένει 30-40s σε ένα HTTP request (που κρεμάει -> 'failed to fetch').
+    Το UI κάνει poll στο /api/engine/status."""
+
+    def __init__(self):
+        self.thread = None
+        self.lock = threading.Lock()
+        self.state = {"running": False, "done": False, "result": None, "error": None,
+                      "started": 0, "mode": None}
+
+    def status(self):
+        with self.lock:
+            s = dict(self.state)
+        if s["running"]:
+            s["elapsed"] = int(time.time() - s["started"])
+        return s
+
+    def start(self, mode, n, min_score):
+        with self.lock:
+            if self.state["running"]:
+                return False
+            self.state = {"running": True, "done": False, "result": None, "error": None,
+                          "started": time.time(), "mode": mode}
+        self.thread = threading.Thread(target=self._run, args=(mode, n, min_score), daemon=True)
+        self.thread.start()
+        return True
+
+    def _run(self, mode, n, min_score):
+        try:
+            if mode == "auto":
+                res = engine.run_auto(n=n, min_score=min_score)
+            else:
+                res = engine.run(load_watchlist(), min_score=min_score)
+            with self.lock:
+                self.state.update({"running": False, "done": True, "result": res})
+        except Exception as e:
+            with self.lock:
+                self.state.update({"running": False, "done": True, "error": str(e)})
+
+
+engine_runner = EngineRunner()
+
+
 class KeywordRadar:
     """Polls το Polymarket για αγορές που ταιριάζουν με keywords· χτυπάει alarm σε νέο match.
     Πηγές: public-search ανά keyword + σάρωση των νεότερων αγορών (substring)."""
@@ -556,13 +600,14 @@ class Handler(BaseHTTPRequestHandler):
                     sigs = [s for s in sigs if s["category"] == cat]
                 sigs = [s for s in sigs if s["score"] >= min_score]
                 return self._send(200, {"signals": sigs[:60], "total_members": len(members)})
-            if u.path == "/api/engine":
-                min_score = float(q.get("min_score", ["65"])[0])
-                return self._send(200, engine.run(load_watchlist(), min_score=min_score))
-            if u.path == "/api/engine/auto":
+            if u.path == "/api/engine/start":
+                mode = q.get("mode", ["watchlist"])[0]
                 min_score = float(q.get("min_score", ["65"])[0])
                 n = int(q.get("n", ["12"])[0])
-                return self._send(200, engine.run_auto(n=n, min_score=min_score))
+                ok = engine_runner.start(mode, n, min_score)
+                return self._send(200, {"ok": ok, "msg": "" if ok else "τρέχει ήδη"})
+            if u.path == "/api/engine/status":
+                return self._send(200, engine_runner.status())
             if u.path == "/api/copy/status":
                 return self._send(200, copy_mgr.status())
             if u.path == "/api/autocopy/status":
