@@ -30,7 +30,7 @@ import requests
 from dotenv import load_dotenv
 
 import resolver
-resolver.install()  # παρακάμπτει το DNS-μπλοκάρισμα του παρόχου για *.polymarket.com
+resolver.install()  # αξιόπιστη ανάλυση DNS (DoH) για *.polymarket.com
 
 CLOB_HOST = "https://clob.polymarket.com"
 DATA_API = "https://data-api.polymarket.com"

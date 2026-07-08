@@ -1,10 +1,9 @@
 """
-Παρακάμπτει το DNS-μπλοκάρισμα του παρόχου (που δηλητηριάζει τα *.polymarket.com)
-λύνοντας ΜΟΝΟ αυτά τα domains μέσω DNS-over-HTTPS στο Cloudflare (1.1.1.1).
+Αξιόπιστη ανάλυση DNS για τα *.polymarket.com domains μέσω DNS-over-HTTPS (Cloudflare 1.1.1.1),
+ώστε να αποφεύγονται προβλήματα με τοπικούς DNS resolvers.
 
-Η επαλήθευση του TLS certificate ΠΑΡΑΜΕΝΕΙ ενεργή: αλλάζει μόνο ποια IP βρίσκουμε,
-όχι το hostname/SNI/cert check. Δεν είναι VPN, δεν κρύβει την IP σου — απλώς βρίσκει
-τη σωστή διεύθυνση αντί για τη σελίδα μπλοκαρίσματος.
+Η επαλήθευση του TLS certificate ΠΑΡΑΜΕΝΕΙ ενεργή: αλλάζει μόνο πώς βρίσκουμε την IP,
+όχι το hostname/SNI/cert check.
 """
 
 import socket

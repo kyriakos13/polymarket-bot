@@ -1,13 +1,7 @@
 # Polymarket mini-bot
 
-Καθαρό, μικρό bot (ένα αρχείο) για **copy trading** και **φτηνά limit orders** στο Polymarket.
-Χωρίς spyware: μιλάει ΜΟΝΟ με τα επίσημα Polymarket API, το private key μένει τοπικά στο `.env`.
-
-## Πώς παρακάμπτεται το μπλοκάρισμα του παρόχου
-Ο πάροχος (Forthnet/Nova) μπλοκάρει τα polymarket.com domains σε επίπεδο DNS.
-Το `resolver.py` λύνει ΜΟΝΟ αυτά τα domains μέσω DNS-over-HTTPS (Cloudflare 1.1.1.1).
-Δεν είναι VPN, δεν κρύβει την IP σου — απλώς βρίσκει τη σωστή διεύθυνση.
-Ο έλεγχος του TLS certificate παραμένει ενεργός.
+Καθαρό, μικρό bot για **copy trading** και **φτηνά limit orders** στο Polymarket.
+Μιλάει ΜΟΝΟ με τα επίσημα Polymarket API, το private key μένει τοπικά στο `.env`.
 
 ## Εγκατάσταση
 ```
@@ -41,8 +35,7 @@ python bot.py copy 0xWALLET
 ```
 python server.py
 ```
-Άνοιξε **http://127.0.0.1:8000** σε **κανονικό browser ΧΩΡΙΣ VPN** (ο server κάνει μόνος του
-την παράκαμψη του μπλοκαρίσματος· ο VPN browser δεν φτάνει στο localhost).
+Άνοιξε **http://127.0.0.1:8000** στον browser σου.
 
 Καρτέλες:
 - **🏆 Κορυφαίοι** — leaderboard, με ⭐ για προσθήκη στη watchlist.
