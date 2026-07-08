@@ -929,6 +929,7 @@ async function egLoad(auto){
       $('#egDiscovered').innerHTML=d+'</table></div>';
     }
     const s=r.summary;
+    if(!s){ out.innerHTML='<span class="dim">Ασυνήθιστη απάντηση από τον server. Κάνε refresh (Ctrl+F5) και ξαναδοκίμασε.</span>'; return; }
     $('#egSummary').textContent = `${s.n_candidates} candidates → ${s.n_approved} approved · A:${s.sleeveA_exposure}% B:${s.sleeveB_exposure}%`;
     // approved
     if(s.standby || !r.approved.length){

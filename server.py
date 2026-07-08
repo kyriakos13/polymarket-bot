@@ -535,6 +535,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype + ("; charset=utf-8" if "json" in ctype or "html" in ctype else ""))
         self.send_header("Content-Length", str(len(data)))
+        # ΠΟΤΕ cache — ώστε ο browser να παίρνει πάντα τον τελευταίο κώδικα (όχι Ctrl+F5)
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.end_headers()
         self.wfile.write(data)
 
