@@ -613,6 +613,27 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/resolve":
                 tokens = [t for t in q.get("tokens", [""])[0].split(",") if t]
                 return self._send(200, bot.resolve_tokens(tokens))
+            if u.path == "/api/sample_markets":
+                # pool ανοιχτών αγορών (με tokens+τιμές) για τα baselines του demo (τυχαίο/φαβορί)
+                limit = min(int(q.get("limit", ["60"])[0]), 100)
+                rows = gamma_get("/markets", {"active": "true", "closed": "false",
+                                              "limit": limit, "order": "volume24hr", "ascending": "false"})
+                out = []
+                for m in rows:
+                    try:
+                        outcomes = json.loads(m.get("outcomes") or "[]")
+                        prices = json.loads(m.get("outcomePrices") or "[]")
+                        tokens = json.loads(m.get("clobTokenIds") or "[]")
+                    except Exception:
+                        continue
+                    for o, p, t in zip(outcomes, prices, tokens):
+                        fp = float(p)
+                        if 0.01 < fp < 0.99:  # παίξιμα (όχι ήδη λυμένα)
+                            out.append({"title": m.get("question", ""), "outcome": o,
+                                        "price": round(fp, 3), "token": t,
+                                        "category": bot.categorize(m.get("question", "")),
+                                        "end": m.get("endDate"), "url": market_event_url(m)})
+                return self._send(200, {"markets": out})
             if u.path == "/api/copy/status":
                 return self._send(200, copy_mgr.status())
             if u.path == "/api/autocopy/status":

@@ -241,34 +241,30 @@
     </div>
   </section>
 
-  <!-- DEMO / PAPER TRADING SIMULATION -->
+  <!-- DEMO / PAPER TRADING RACE -->
   <section id="demo" class="panel">
     <div class="card">
-      <h3>🎮 Demo — άσε το bot να παίξει με εικονικά λεφτά</h3>
+      <h3>🎮 Demo — κούρσα στρατηγικών με εικονικά λεφτά</h3>
       <div class="row">
-        <label class="dim">αρχικό bankroll €</label>
+        <label class="dim">bankroll ανά στρατηγική €</label>
         <input id="dmStart" class="amt" type="number" value="400" min="10" step="10">
-        <select id="dmSource">
-          <option value="auto">Επιλογή: Auto-discover</option>
-          <option value="watchlist">Επιλογή: από Watchlist</option>
-        </select>
         <button class="btn green" onclick="dmStartSim()">▶ Ξεκίνα / Reset</button>
+        <button class="btn" onclick="dmRunRound()">🎲 Τρέξε γύρο</button>
+        <button class="btn ghost" onclick="dmRefresh()">↻ Ανανέωση</button>
+        <label class="dim" title="γύρος + ανανέωση κάθε 90s"><input type="checkbox" id="dmAuto" onchange="dmToggleAuto()"> ♻ Αυτόματα</label>
       </div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn" onclick="dmRunRound()">🎲 Τρέξε γύρο (διάλεξε &amp; ποντάρισε)</button>
-        <button class="btn ghost" onclick="dmRefresh()">↻ Ανανέωση αποτελεσμάτων</button>
-        <label class="dim" title="Τρέχει γύρο + ανανέωση αυτόματα κάθε 60s"><input type="checkbox" id="dmAuto" onchange="dmToggleAuto()"> ♻ Αυτόματα</label>
-        <span id="dmRoundInfo" class="dim" style="font-size:12px"></span>
-      </div>
+      <div class="row" style="margin-top:6px"><span id="dmRoundInfo" class="dim" style="font-size:12px"></span></div>
       <div class="hint">
-        Το bot διαλέγει bets με τα κριτήρια του engine (dual-sleeve + auto-discover), τα ποντάρει
-        <b>εικονικά</b> με sizing ανάλογο του bankroll, και όταν λύνονται οι αγορές υπολογίζει κέρδος/ζημιά.
-        Όλα μένουν στον browser σου (localStorage) — δες τι θα έβγαζε πριν βάλεις πραγματικά λεφτά.
+        Κάθε στρατηγική ξεκινά με το ίδιο bankroll και ποντάρει <b>εικονικά</b> τα δικά της picks.
+        Οι <b>smart</b> (Συναίνεση/Longshot/Value) έναντι των <b>baselines</b> (Τυχαίο/Copy-#1/Φαβορί).
+        Νικήτρια = αυτή που ξεπερνά το τυχαίο. Όλα σε localStorage.
       </div>
     </div>
-    <div class="card"><div id="dmStats" class="dim">Πάτα «Ξεκίνα» για να αρχίσει η προσομοίωση.</div></div>
-    <div class="card"><h3>Ανοιχτά paper bets</h3><div id="dmOpen" class="dim">—</div></div>
-    <div class="card"><h3>Κλεισμένα (λυμένα)</h3><div id="dmClosed" class="dim">—</div></div>
+    <div class="card"><h3>Κατάταξη στρατηγικών</h3><div id="dmBoard" class="dim">Πάτα «Ξεκίνα».</div></div>
+    <div class="card"><h3>Λεπτομέρειες</h3>
+      <select id="dmDetailSel" onchange="dmRenderDetail()" style="margin-bottom:8px"></select>
+      <div id="dmDetail" class="dim">—</div>
+    </div>
   </section>
 
   <!-- JOURNAL / CALIBRATION EXPERIMENT -->
@@ -695,8 +691,17 @@ async function amLoad(offset){
 function amPrev(){ if(amOffset>0) amLoad(Math.max(0, amOffset-(+$('#amPageSize').value))); }
 function amNext(){ if(amHasMore) amLoad(amOffset+(+$('#amPageSize').value)); }
 
-// ---- DEMO / paper trading simulation (localStorage) ----
-const DM_KEY = 'pmdemo_sim_v1';
+// ---- DEMO / paper-trading RACE (localStorage) ----
+const DM_KEY = 'pmdemo_race_v1';
+const DM_STRATS = {
+  consensus: {name:'Α · Συναίνεση', smart:true},
+  longshot:  {name:'Β · Longshot',  smart:true},
+  value:     {name:'Γ · Value',     smart:true},
+  random:    {name:'Τυχαίο',         smart:false},
+  copytop:   {name:'Copy-#1',        smart:false},
+  favorite:  {name:'Φαβορί',         smart:false},
+};
+const DM_MAX_PER_ROUND = 3;   // max νέα bets ανά στρατηγική/γύρο
 let dmAutoTimer = null;
 
 function dmLoad(){ try{ return JSON.parse(localStorage.getItem(DM_KEY)); }catch(e){ return null; } }
@@ -704,136 +709,152 @@ function dmSave(s){ localStorage.setItem(DM_KEY, JSON.stringify(s)); }
 
 function dmStartSim(){
   const start = +$('#dmStart').value || 400;
-  if(dmLoad() && !confirm('Υπάρχει ήδη προσομοίωση. Να μηδενιστεί και να ξεκινήσει νέα;')) return;
-  dmSave({ start, created: Date.now(), source: $('#dmSource').value, positions: [] });
+  if(dmLoad() && !confirm('Υπάρχει ήδη κούρσα. Να μηδενιστεί και να ξεκινήσει νέα;')) return;
+  const strat = {}; for(const k in DM_STRATS) strat[k] = [];
+  dmSave({ start, created: Date.now(), strat });
+  const sel=$('#dmDetailSel'); sel.innerHTML = Object.keys(DM_STRATS).map(k=>`<option value="${k}">${DM_STRATS[k].name}</option>`).join('');
   dmRender();
 }
 
-// άνοιγμα paper bets από τα approved του engine
+function dmEquity(positions, start){
+  let realized = 0;
+  for(const p of positions){
+    if(p.result===1) realized += (p.shares - p.cost);
+    else if(p.result===0) realized += (-p.cost);
+  }
+  return start + realized;
+}
+
+function dmAddBet(sim, key, pick, pct){
+  const arr = sim.strat[key];
+  if(arr.some(p=>p.token===pick.token && p.result===null)) return false;  // ήδη ανοιχτό
+  const price = pick.price>0 && pick.price<1 ? pick.price : 0.5;
+  const equity = dmEquity(arr, sim.start);
+  const cost = Math.max(1, +(equity * pct/100).toFixed(2));
+  arr.push({ id:Date.now()+'-'+Math.random().toString(36).slice(2,6), ts:Date.now(),
+    token:pick.token, market:pick.market||pick.title, outcome:pick.outcome,
+    sleeve:pick.sleeve||'', price, shares:+(cost/price).toFixed(2), cost, result:null, closed:null });
+  return true;
+}
+
 async function dmRunRound(){
   const sim = dmLoad();
   if(!sim){ alert('Πάτα πρώτα «Ξεκίνα».'); return; }
-  const info = $('#dmRoundInfo'); info.textContent = 'Το bot διαλέγει… (auto-discover ~30-40s)';
+  const info = $('#dmRoundInfo'); info.textContent = 'Το bot διαλέγει… (engine ~30-40s + baselines)';
   try{
-    await api(`/api/engine/start?mode=${sim.source}&n=12&min_score=65`);
+    // 1) smart signals από engine (auto-discover)
+    await api('/api/engine/start?mode=auto&n=12&min_score=65');
     let r = null;
     for(let i=0;i<120;i++){
       await new Promise(res=>setTimeout(res,1500));
       const st = await api('/api/engine/status');
-      if(st.error){ info.textContent='Σφάλμα: '+st.error; return; }
+      if(st.error){ info.textContent='Σφάλμα engine: '+st.error; return; }
       if(st.done){ r = st.result; break; }
     }
-    if(!r || !r.approved){ info.textContent='Δεν βρέθηκαν σήματα αυτόν τον γύρο (Standby).'; return; }
-    const equity = dmEquity(sim);
-    let added = 0;
-    for(const c of r.approved){
-      // μην ξαναποντάρεις το ίδιο token αν είναι ήδη ανοιχτό
-      if(sim.positions.some(p=>p.token===c.token && p.result===null)) continue;
-      const cost = Math.max(1, +(equity * (c.alloc_pct||0.25)/100).toFixed(2));
-      const price = c.price>0 ? c.price : 0.5;
-      sim.positions.push({
-        id: Date.now()+'-'+added, ts: Date.now(), token: c.token,
-        market: c.market, outcome: c.outcome, sleeve: c.sleeve,
-        price, shares: +(cost/price).toFixed(2), cost, result: null, closed: null,
-      });
-      added++;
+    const cands = r ? [...(r.approved||[]), ...(r.watch||[])] : [];
+    // 2) pool για baselines
+    let pool = [];
+    try{ pool = (await api('/api/sample_markets?limit=60')).markets || []; }catch(e){}
+    // 3) copy-#1: πρόσφατα BUY του κορυφαίου discovered wallet
+    let topBuys = [];
+    if(r && r.discovered && r.discovered.length){
+      try{
+        const tr = await api('/api/trades?wallet='+r.discovered[0].wallet+'&limit=20');
+        topBuys = tr.filter(t=>t.side==='BUY').map(t=>({token:t.asset, price:+t.price, outcome:t.outcome, title:t.title}));
+      }catch(e){}
+    }
+    const rnd = a => a.slice().sort(()=>Math.random()-0.5);
+    const picks = {
+      consensus: cands.filter(c=>c.indep_n>=2),
+      longshot:  cands.filter(c=>c.sleeve==='A'),
+      value:     cands.filter(c=>c.sleeve==='B'),
+      random:    rnd(pool),
+      copytop:   topBuys,
+      favorite:  rnd(pool.filter(m=>m.price>0.65)),
+    };
+    let total=0;
+    for(const key in DM_STRATS){
+      const pct = DM_STRATS[key].smart ? 1.2 : 1.2;
+      let n=0;
+      for(const pk of (picks[key]||[])){
+        if(n>=DM_MAX_PER_ROUND) break;
+        if(dmAddBet(sim, key, pk, pct)){ n++; total++; }
+      }
     }
     dmSave(sim);
-    info.textContent = added ? `✅ Προστέθηκαν ${added} paper bets.` : 'Κανένα νέο bet (όλα ήδη ανοιχτά ή Standby).';
-    dmRender();
+    info.textContent = `✅ Γύρος ολοκληρώθηκε — ${total} νέα paper bets συνολικά.`;
     await dmRefresh();
   }catch(e){ info.textContent='Σφάλμα: '+e; }
 }
 
-// λύσε ανοιχτά bets μέσω Gamma
 async function dmRefresh(){
   const sim = dmLoad();
   if(!sim) return;
-  const open = sim.positions.filter(p=>p.result===null);
-  if(!open.length){ dmRender(); return; }
-  try{
-    const res = await api('/api/resolve?tokens='+open.map(p=>p.token).join(','));
-    let changed = 0;
-    for(const p of sim.positions){
-      if(p.result===null && (res[p.token]===0 || res[p.token]===1)){
-        p.result = res[p.token]; p.closed = Date.now(); changed++;
+  const openTokens = [];
+  for(const k in sim.strat) for(const p of sim.strat[k]) if(p.result===null) openTokens.push(p.token);
+  if(openTokens.length){
+    try{
+      const res = await api('/api/resolve?tokens='+[...new Set(openTokens)].join(','));
+      let changed=0;
+      for(const k in sim.strat) for(const p of sim.strat[k]){
+        if(p.result===null && (res[p.token]===0 || res[p.token]===1)){ p.result=res[p.token]; p.closed=Date.now(); changed++; }
       }
-    }
-    if(changed){ dmSave(sim); }
-    dmRender();
-  }catch(e){ dmRender(); }
-}
-
-function dmEquity(sim){
-  // ρευστό = start - Σcost ανοιχτών + Σpayoff λυμένων· equity = ρευστό + ανοιχτά(at entry)
-  let realized = 0;
-  for(const p of sim.positions){
-    if(p.result===1) realized += (p.shares - p.cost);   // κέρδος
-    else if(p.result===0) realized += (-p.cost);          // ζημιά
+      if(changed) dmSave(sim);
+    }catch(e){}
   }
-  return sim.start + realized;
-}
-
-function dmPnlSince(sim, hours){
-  const cut = Date.now() - hours*3600*1000;
-  let pnl = 0;
-  for(const p of sim.positions){
-    if(p.result!==null && p.closed>=cut){
-      pnl += p.result===1 ? (p.shares - p.cost) : (-p.cost);
-    }
-  }
-  return pnl;
+  dmRender();
 }
 
 function dmRender(){
   const sim = dmLoad();
-  if(!sim){ $('#dmStats').innerHTML='<span class="dim">Καμία προσομοίωση. Πάτα «Ξεκίνα».</span>'; $('#dmOpen').textContent='—'; $('#dmClosed').textContent='—'; return; }
-  const open = sim.positions.filter(p=>p.result===null);
-  const closed = sim.positions.filter(p=>p.result!==null).sort((a,b)=>b.closed-a.closed);
-  const equity = dmEquity(sim);
-  const pnl = equity - sim.start;
-  const wins = closed.filter(p=>p.result===1).length;
+  if(!sim){ $('#dmBoard').innerHTML='<span class="dim">Καμία κούρσα. Πάτα «Ξεκίνα».</span>'; $('#dmDetail').textContent='—'; return; }
   const eur = x => (x>=0?'+':'-')+'€'+Math.abs(x).toFixed(2);
   const cls = x => x>=0?'pos':'neg';
-  $('#dmStats').innerHTML = `
-    <div class="row" style="gap:24px;flex-wrap:wrap;align-items:baseline">
-      <div><span class="dim">Τρέχον κεφάλαιο</span><br><b style="font-size:22px" class="${cls(pnl)}">€${equity.toFixed(2)}</b></div>
-      <div><span class="dim">Συνολικό P&L</span><br><b class="${cls(pnl)}">${eur(pnl)}</b> <span class="dim">(${(100*pnl/sim.start).toFixed(1)}%)</span></div>
-      <div><span class="dim">Bets</span><br><b>${sim.positions.length}</b> <span class="dim">(${open.length} ανοιχτά)</span></div>
-      <div><span class="dim">Win rate</span><br><b>${closed.length?Math.round(100*wins/closed.length):'—'}${closed.length?'%':''}</b> <span class="dim">${wins}/${closed.length}</span></div>
-    </div>
-    <table style="margin-top:10px"><tr><th>Διάστημα</th><th>7 ημέρες</th><th>30 ημέρες</th><th>60 ημέρες</th><th>120 ημέρες</th></tr>
-    <tr><td class="dim">P&L (λυμένα)</td>
-      <td class="${cls(dmPnlSince(sim,168))}">${eur(dmPnlSince(sim,168))}</td>
-      <td class="${cls(dmPnlSince(sim,720))}">${eur(dmPnlSince(sim,720))}</td>
-      <td class="${cls(dmPnlSince(sim,1440))}">${eur(dmPnlSince(sim,1440))}</td>
-      <td class="${cls(dmPnlSince(sim,2880))}">${eur(dmPnlSince(sim,2880))}</td></tr></table>
-    <div class="hint">Ξεκίνησε ${new Date(sim.created).toLocaleDateString('el')} με €${sim.start} · πηγή επιλογής: ${sim.source}</div>`;
+  const rows = Object.keys(DM_STRATS).map(k=>{
+    const arr = sim.strat[k];
+    const eq = dmEquity(arr, sim.start);
+    const closed = arr.filter(p=>p.result!==null);
+    const wins = closed.filter(p=>p.result===1).length;
+    return {k, name:DM_STRATS[k].name, smart:DM_STRATS[k].smart, eq, pnl:eq-sim.start,
+            bets:arr.length, open:arr.filter(p=>p.result===null).length, resolved:closed.length, wins};
+  }).sort((a,b)=>b.eq-a.eq);
 
-  $('#dmOpen').innerHTML = open.length
-    ? '<table><tr><th>Sleeve</th><th>Επιλογή</th><th>Τιμή</th><th>Ποσό</th><th>Αγορά</th><th>Πότε</th></tr>'+
-      open.map(p=>`<tr><td>${sleeveTag(p.sleeve)}</td><td>${p.outcome}</td><td>${(p.price*100).toFixed(1)}¢</td>
-        <td>€${p.cost.toFixed(2)}</td><td class="dim">${(p.market||'').slice(0,38)}</td>
-        <td class="dim mono" style="font-size:11px">${new Date(p.ts).toLocaleDateString('el')}</td></tr>`).join('')+'</table>'
-    : '<span class="dim">Κανένα ανοιχτό. Πάτα «Τρέξε γύρο».</span>';
+  const rnd = rows.find(r=>r.k==='random');
+  let h='<table><tr><th>#</th><th>Στρατηγική</th><th>Κεφάλαιο</th><th>P&L</th><th>vs Τυχαίο</th><th>Win%</th><th>Bets</th></tr>';
+  rows.forEach((r,i)=>{
+    const vsR = r.pnl - (rnd?rnd.pnl:0);
+    h+=`<tr>
+      <td>${i+1}</td>
+      <td>${r.smart?'<span class="tag" style="background:#1f2a3a;color:var(--accent)">smart</span> ':'<span class="tag">base</span> '}${r.name}</td>
+      <td class="${cls(r.pnl)}"><b>€${r.eq.toFixed(2)}</b></td>
+      <td class="${cls(r.pnl)}">${eur(r.pnl)} <span class="dim">${(100*r.pnl/sim.start).toFixed(1)}%</span></td>
+      <td class="${r.k==='random'?'dim':cls(vsR)}">${r.k==='random'?'—':eur(vsR)}</td>
+      <td>${r.resolved?Math.round(100*r.wins/r.resolved):'—'}${r.resolved?'%':''} <span class="dim">${r.wins}/${r.resolved}</span></td>
+      <td>${r.bets} <span class="dim">(${r.open})</span></td></tr>`;
+  });
+  h+='</table><div class="hint">«vs Τυχαίο» = πόσο ξεπερνά το τυχαίο baseline. Θετικό σε αρκετά λυμένα bets = ένδειξη πραγματικού edge. Ξεκίνησε '+new Date(sim.created).toLocaleDateString('el')+' με €'+sim.start+'/στρατηγική.</div>';
+  $('#dmBoard').innerHTML = h;
+  if(!$('#dmDetailSel').children.length) $('#dmDetailSel').innerHTML = Object.keys(DM_STRATS).map(k=>`<option value="${k}">${DM_STRATS[k].name}</option>`).join('');
+  dmRenderDetail();
+}
 
-  $('#dmClosed').innerHTML = closed.length
-    ? '<table><tr><th></th><th>Επιλογή</th><th>Τιμή</th><th>Ποσό</th><th>Αποτέλεσμα</th><th>Αγορά</th></tr>'+
-      closed.slice(0,50).map(p=>{
-        const win=p.result===1, ret=win?(p.shares-p.cost):(-p.cost);
-        return `<tr><td>${win?'<span class="pos">✅</span>':'<span class="neg">❌</span>'}</td>
-          <td>${p.outcome}</td><td>${(p.price*100).toFixed(1)}¢</td><td>€${p.cost.toFixed(2)}</td>
-          <td class="${win?'pos':'neg'}">${(ret>=0?'+':'-')+'€'+Math.abs(ret).toFixed(2)}</td>
-          <td class="dim">${(p.market||'').slice(0,34)}</td></tr>`;
-      }).join('')+'</table>'
-    : '<span class="dim">Τίποτα λυμένο ακόμα (οι αγορές δεν έκλεισαν).</span>';
+function dmRenderDetail(){
+  const sim = dmLoad(); if(!sim) return;
+  const k = $('#dmDetailSel').value || 'consensus';
+  const arr = (sim.strat[k]||[]).slice().sort((a,b)=>(b.closed||b.ts)-(a.closed||a.ts));
+  if(!arr.length){ $('#dmDetail').innerHTML='<span class="dim">Κανένα bet ακόμα σε αυτή τη στρατηγική.</span>'; return; }
+  $('#dmDetail').innerHTML='<table><tr><th></th><th>Επιλογή</th><th>Τιμή</th><th>Ποσό</th><th>Αποτέλεσμα</th><th>Αγορά</th></tr>'+
+    arr.slice(0,60).map(p=>{
+      const st = p.result===null?'<span class="dim">ανοιχτό</span>':(p.result===1?'<span class="pos">✅ +€'+(p.shares-p.cost).toFixed(2)+'</span>':'<span class="neg">❌ -€'+p.cost.toFixed(2)+'</span>');
+      return `<tr><td>${p.result===null?'⏳':(p.result?'✅':'❌')}</td><td>${p.outcome}</td>
+        <td>${(p.price*100).toFixed(1)}¢</td><td>€${p.cost.toFixed(2)}</td><td>${st}</td>
+        <td class="dim">${(p.market||'').slice(0,34)}</td></tr>`;
+    }).join('')+'</table>';
 }
 
 function dmToggleAuto(){
-  if($('#dmAuto').checked){
-    dmAutoTimer = setInterval(async()=>{ await dmRunRound(); }, 60000);
-    dmRunRound();
-  } else if(dmAutoTimer){ clearInterval(dmAutoTimer); dmAutoTimer=null; }
+  if($('#dmAuto').checked){ dmRunRound(); dmAutoTimer = setInterval(dmRunRound, 90000); }
+  else if(dmAutoTimer){ clearInterval(dmAutoTimer); dmAutoTimer=null; }
 }
 
 // ---- calibration journal ----
